@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAV System Map · Marc Vidalmorgó</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#060606; }
+body {
+  font-family:'IBM Plex Mono','Courier New',monospace;
+  color:#f0ebe0;
+}
+/* grain */
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:9999; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+/* bg grid */
+body::after {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image: radial-gradient(circle, #1a1a1a 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.4;
+}
+
+/* ── HEADER ── */
+.hdr {
+  position:fixed; top:20px; left:24px; z-index:100;
+  pointer-events:none;
+}
+.hdr-title { font-family:'Bebas Neue',sans-serif; font-size:15px; letter-spacing:7px; color:#C8A84B; }
+.hdr-sub { font-size:8px; letter-spacing:3px; color:#2e2e2e; margin-top:2px; text-transform:uppercase; }
+
+/* ── CONTROLS ── */
+.ctrl {
+  position:fixed; top:20px; right:24px; z-index:100;
+  display:flex; gap:6px; align-items:center;
+}
+.cbtn {
+  background:#0d0d0d; border:1px solid #1e1e1e;
+  color:#555; padding:6px 12px; font-family:inherit; font-size:9px;
+  letter-spacing:2px; cursor:pointer; text-transform:uppercase; transition:all 0.15s;
+}
+.cbtn:hover { color:#C8A84B; border-color:#C8A84B; }
+.zlbl { font-size:9px; letter-spacing:2px; color:#333; min-width:36px; text-align:center; }
+
+/* ── LEGEND ── */
+.legend {
+  position:fixed; bottom:24px; left:24px; z-index:100;
+  background:#0a0a0a; border:1px solid #181818; padding:12px 16px;
+}
+.lg-title { font-size:7px; letter-spacing:4px; color:#2e2e2e; text-transform:uppercase; margin-bottom:10px; }
+.lg-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+.lg-dot { width:7px; height:7px; border-radius:50%; }
+.lg-lbl { font-size:8px; letter-spacing:1px; color:#444; }
+
+/* ── WRAPPER / CANVAS ── */
+.wrapper { width:100vw; height:100vh; overflow:hidden; cursor:grab; position:relative; z-index:1; }
+.wrapper.dragging { cursor:grabbing; }
+.canvas { position:relative; width:3100px; height:1080px; transform-origin:0 0; will-change:transform; }
+/* feedback loop node */
+.nloop {
+  background:#0a0a0a; border:1px solid #C8A84B;
+  padding:12px 24px; text-align:center;
+  box-shadow:0 0 20px rgba(200,168,75,0.1);
+}
+.nloop:hover { box-shadow:0 0 36px rgba(200,168,75,0.25); }
+.nloop-label { font-size:8px; letter-spacing:4px; color:#C8A84B; text-transform:uppercase; margin-bottom:4px; }
+.nloop-name { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:3px; color:#888; }
+.nloop-arrow { font-size:16px; color:#C8A84B; margin:0 10px; }
+.svg-lines { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+
+/* ── NODE BASE ── */
+.node { position:absolute; transition:box-shadow 0.2s; }
+.node:hover { z-index:50; }
+
+/* ── PERSON ── */
+.np {
+  background:#0a0a0a; border:2px solid #C8A84B;
+  padding:14px 20px; min-width:250px;
+  box-shadow:0 0 24px rgba(200,168,75,0.12);
+}
+.np:hover { box-shadow:0 0 44px rgba(200,168,75,0.28); }
+.np-name { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:4px; }
+.np-role { font-size:8px; letter-spacing:3px; color:#C8A84B; margin-top:3px; text-transform:uppercase; }
+.np-meta { font-size:8px; color:#444; margin-top:2px; letter-spacing:0.5px; }
+
+/* ── ORG ── */
+.no {
+  background:#0a0a0a; padding:13px 16px; min-width:215px;
+}
+.no.gold { border:1px solid #5a4a1a; box-shadow:0 0 16px rgba(200,168,75,0.06); }
+.no.gold:hover { box-shadow:0 0 32px rgba(200,168,75,0.18); border-color:#C8A84B; }
+.no.cyan { border:1px solid #003a42; box-shadow:0 0 16px rgba(0,194,209,0.05); }
+.no.cyan:hover { box-shadow:0 0 28px rgba(0,194,209,0.18); border-color:#00C2D1; }
+.no.green { border:1px solid #1a4a2a; box-shadow:0 0 16px rgba(91,168,122,0.05); }
+.no.green:hover { box-shadow:0 0 28px rgba(91,168,122,0.18); border-color:#5BA87A; }
+.no.purple { border:1px solid #3a1a6a; box-shadow:0 0 16px rgba(155,111,212,0.05); }
+.no.purple:hover { box-shadow:0 0 28px rgba(155,111,212,0.18); border-color:#9B6FD4; }
+.no-tag { font-size:7px; letter-spacing:3px; text-transform:uppercase; margin-bottom:5px; }
+.no-tag.gold { color:#C8A84B; } .no-tag.cyan { color:#00C2D1; }
+.no-tag.green { color:#5BA87A; } .no-tag.purple { color:#9B6FD4; }
+.no-name { font-family:'Bebas Neue',sans-serif; font-size:19px; letter-spacing:3px; }
+.no-desc { font-size:8px; color:#444; margin-top:4px; letter-spacing:0.5px; line-height:1.6; }
+
+/* ── TOOL ── */
+.nt {
+  background:#0a0a0a; border:1px solid #141414; padding:11px 14px; min-width:155px;
+}
+.nt:hover { border-color:#1e2e30; box-shadow:0 0 20px rgba(0,194,209,0.12); }
+.nt-tag { font-size:7px; letter-spacing:2px; color:#004d55; text-transform:uppercase; margin-bottom:4px; }
+.nt-name { font-family:'Bebas Neue',sans-serif; font-size:17px; letter-spacing:3px; color:#c0bab0; }
+.nt-desc { font-size:8px; color:#3a3a3a; margin-top:3px; letter-spacing:0.5px; line-height:1.5; }
+
+/* ── BOT ── */
+.nb {
+  background:#0a0a0a; border:1px solid #00C2D1; padding:10px 14px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow:0 0 12px rgba(0,194,209,0.1);
+  animation: nb-pulse 3s ease-in-out infinite;
+}
+@keyframes nb-pulse { 0%,100%{box-shadow:0 0 12px rgba(0,194,209,0.1)} 50%{box-shadow:0 0 22px rgba(0,194,209,0.22)} }
+.nb:hover { box-shadow:0 0 30px rgba(0,194,209,0.3) !important; }
+.nb-count { font-family:'Bebas Neue',sans-serif; font-size:32px; color:#00C2D1; letter-spacing:2px; line-height:1; }
+.nb-label { font-size:9px; letter-spacing:2px; color:#00C2D1; text-transform:uppercase; }
+.nb-desc { font-size:8px; color:#3a3a3a; margin-top:2px; letter-spacing:0.5px; }
+
+/* ── PARTNER ── */
+.npart {
+  background:#0a0a0a; border:1px solid #181818; padding:12px 14px;
+}
+.npart:hover { border-color:#2e2e2e; }
+.npart-init { font-family:'Bebas Neue',sans-serif; font-size:28px; color:#1e1e1e; letter-spacing:2px; line-height:1; }
+.npart-name { font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px; color:#888; margin-top:3px; }
+.npart-role { font-size:7px; color:#444; letter-spacing:1px; margin-top:2px; }
+.npart-pct { font-size:8px; color:#C8A84B; margin-top:5px; letter-spacing:1px; }
+
+/* ── FUTURE ── */
+.nf {
+  background:#0c0c0c; border:1px dashed #3a3a3a; padding:10px 14px; opacity:0.8;
+}
+.nf:hover { opacity:1; border-color:#555; box-shadow:0 0 18px rgba(200,168,75,0.08); }
+.nf-tag { font-size:7px; letter-spacing:3px; color:#555; text-transform:uppercase; margin-bottom:3px; }
+.nf-name { font-family:'Bebas Neue',sans-serif; font-size:14px; letter-spacing:2px; color:#888; }
+.nf-desc { font-size:8px; color:#444; margin-top:3px; letter-spacing:0.5px; line-height:1.4; }
+
+/* ── STATUS ── */
+.st { display:inline-flex; align-items:center; gap:5px; font-size:7px; letter-spacing:2px; text-transform:uppercase; margin-top:6px; }
+.std { width:5px; height:5px; border-radius:50%; }
+.st-on .std { background:#5BA87A; animation:blink 2s infinite; }
+.st-build .std { background:#C8A84B; }
+.st-soon .std { background:#333; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── BOT SVG ── */
+.bot-svg-el { animation:bot-glow 2.8s ease-in-out infinite; flex-shrink:0; }
+@keyframes bot-glow {
+  0%,100%{filter:drop-shadow(0 0 3px rgba(0,194,209,0.5))}
+  50%{filter:drop-shadow(0 0 9px rgba(0,194,209,0.9))}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">VAV SYSTEM MAP</div>
+  <div class="hdr-sub">Marc Vidalmorgó · Arquitectura del ecosistema · 2026–∞</div>
+</div>
+
+<div class="ctrl">
+  <button class="cbtn" onclick="setZ(z-0.1)">−</button>
+  <span class="zlbl" id="zlbl">—</span>
+  <button class="cbtn" onclick="setZ(z+0.1)">+</button>
+  <button class="cbtn" onclick="fit()">FIT</button>
+  <button class="cbtn" onclick="setZ(1);tx=0;ty=40;applyT()">100%</button>
+</div>
+
+<div class="legend">
+  <div class="lg-title">Leyenda</div>
+  <div class="lg-row"><div class="lg-dot" style="background:#C8A84B"></div><span class="lg-lbl">Holding / Negocio</span></div>
+  <div class="lg-row"><div class="lg-dot" style="background:#00C2D1"></div><span class="lg-lbl">IA / Tech / Agentes</span></div>
+  <div class="lg-row"><div class="lg-dot" style="background:#5BA87A"></div><span class="lg-lbl">Capital / Trading</span></div>
+  <div class="lg-row"><div class="lg-dot" style="background:#9B6FD4"></div><span class="lg-lbl">Media / Newsletter</span></div>
+  <div class="lg-row"><div class="lg-dot" style="background:#1e1e1e;border:1px dashed #444"></div><span class="lg-lbl">Proyectado / Futuro</span></div>
+</div>
+
+<div class="wrapper" id="wrapper">
+<div class="canvas" id="canvas">
+<svg class="svg-lines" id="svgl" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+</svg>
+
+<!-- ══════════ ROW 1 — MARC ══════════ -->
+<div class="node np" id="marc" style="left:960px;top:30px;width:260px;">
+  <div class="np-name">MARC VIDALMORGÓ</div>
+  <div class="np-role">Fundador · Socio único · Arquitecto del sistema</div>
+  <div class="np-meta">24 años · Lleida · Comercio Intl + Máster Dir. Financiera</div>
+</div>
+
+<!-- ══════════ ROW 2 — SECOND BRAIN + VAV ══════════ -->
+<div class="node no cyan" id="second-brain" style="left:200px;top:235px;width:230px;">
+  <div class="no-tag cyan">Stack de inteligencia personal</div>
+  <div class="no-name">SECOND BRAIN</div>
+  <div class="no-desc">Notion + Claude Code + Claude.ai<br>MCP tools · Memoria persistente</div>
+</div>
+
+<div class="node no gold" id="vav" style="left:1760px;top:235px;width:260px;">
+  <div class="no-tag gold">Holding patrimonial · SL · 100% Marc</div>
+  <div class="no-name">VAV HOLDING SL</div>
+  <div class="no-desc">Vision Among Visioners<br>Lleida, Cataluña, España</div>
+  <div class="st st-build"><span class="std"></span><span style="color:#C8A84B">En constitución 2026</span></div>
+</div>
+
+<!-- ══════════ ROW 3 LEFT — TOOLS ══════════ -->
+<div class="node nt" id="notion" style="left:40px;top:440px;width:170px;">
+  <div class="nt-tag">Conocimiento · CRM</div>
+  <div class="nt-name">NOTION</div>
+  <div class="nt-desc">Proyectos · BD · Tesis<br>Second Brain hub</div>
+</div>
+
+<div class="node nt" id="claude-code" style="left:235px;top:440px;width:195px;">
+  <div class="nt-tag">Dev · Ejecución · MCP</div>
+  <div class="nt-name">CLAUDE CODE</div>
+  <div class="nt-desc">CLI local · Agentes IA<br>Memory PC · Todas las tools</div>
+</div>
+
+<div class="node nt" id="claude-ai" style="left:460px;top:440px;width:185px;">
+  <div class="nt-tag">Estrategia · Contenido</div>
+  <div class="nt-name">CLAUDE.AI</div>
+  <div class="nt-desc">Brainstorming · Redacción<br>Research · Análisis</div>
+</div>
+
+<div class="node nf" id="future-tools" style="left:235px;top:545px;width:410px;">
+  <div class="nf-tag">Próximamente · Stack ampliado</div>
+  <div class="nf-name">N8N SELF-HOSTED · CURSOR · MCP SERVERS</div>
+  <div class="nf-desc">Automatizaciones · Agentes especializados · Integración continua</div>
+</div>
+
+<!-- ══════════ ROW 3 RIGHT — VAV HIJOS ══════════ -->
+<div class="node no gold" id="vifer" style="left:870px;top:445px;width:235px;">
+  <div class="no-tag gold">Startup SaaS · 50% VAV</div>
+  <div class="no-name">VIFER SL</div>
+  <div class="no-desc">Automatización IA para pymes españolas<br>SaaS de suscripción · Alto margen</div>
+  <div class="st st-build"><span class="std"></span><span style="color:#C8A84B">En construcción</span></div>
+</div>
+
+<div class="node no green" id="trading" style="left:1440px;top:445px;width:240px;">
+  <div class="no-tag green">Capital cripto · 50% VAV</div>
+  <div class="no-name">TRADING LAB</div>
+  <div class="no-desc">Convergence Plays · DePIN · RWA<br>Metodología de fondo · 2030</div>
+  <div class="st st-on"><span class="std"></span><span style="color:#5BA87A">Operando</span></div>
+</div>
+
+<div class="node no purple" id="ventana" style="left:1980px;top:445px;width:235px;">
+  <div class="no-tag purple">Media financiero · 50% VAV</div>
+  <div class="no-name">VENTANA</div>
+  <div class="no-desc">Newsletter · Análisis cripto<br>Plataforma web interactiva</div>
+  <div class="st st-soon"><span class="std"></span><span style="color:#9B6FD4">Lanzamiento 2026</span></div>
+</div>
+
+<!-- ══════════ ROW 3 RIGHT — FUTUROS PROYECTOS VAV (mismo nivel que hijos) ══════════ -->
+<div class="node nf" id="venture-forge" style="left:2280px;top:445px;width:230px;">
+  <div class="nf-tag">Próximamente · Incubadora</div>
+  <div class="nf-name">VENTUREFORGE</div>
+  <div class="nf-desc">Incubadora de startups<br>Selección · Aceleración · Capital</div>
+</div>
+
+<div class="node nf" id="founder-os" style="left:2540px;top:445px;width:225px;">
+  <div class="nf-tag">Próximamente · Digital</div>
+  <div class="nf-name">FOUNDER OS</div>
+  <div class="nf-desc">Productos digitales para founders<br>Templates · Cursos · Tools</div>
+</div>
+
+<div class="node nf" id="otros" style="left:2800px;top:445px;width:230px;">
+  <div class="nf-tag">Proyectado · Experimentales</div>
+  <div class="nf-name">OTROS PROYECTOS</div>
+  <div class="nf-desc">E-commerce alto margen<br>Adquisiciones · Nuevas tesis</div>
+</div>
+
+<!-- ══════════ ROW 4 — VIFER SUB-NODES ══════════ -->
+<div class="node npart" id="joel" style="left:700px;top:800px;width:185px;">
+  <div class="npart-init">JF</div>
+  <div class="npart-name">JOEL FERNÁNDEZ</div>
+  <div class="npart-role">CEO Negocio · Co-fundador Vifer</div>
+  <div class="npart-pct">50% Vifer SL</div>
+</div>
+
+<div class="node nb" id="vifer-bots" style="left:910px;top:800px;width:210px;">
+  <svg class="bot-svg-el" viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg" style="width:42px;height:38px">
+    <rect x="4" y="2" width="72" height="54" rx="4" fill="white"/>
+    <rect x="14" y="54" width="16" height="17" rx="2" fill="white"/>
+    <rect x="50" y="54" width="16" height="17" rx="2" fill="white"/>
+    <rect x="0" y="14" width="10" height="22" rx="3" fill="white"/>
+    <rect x="70" y="14" width="10" height="22" rx="3" fill="white"/>
+    <rect x="7" y="5" width="66" height="48" rx="3" fill="#C8705A"/>
+    <rect x="16" y="49" width="14" height="15" rx="2" fill="#C8705A"/>
+    <rect x="50" y="49" width="14" height="15" rx="2" fill="#C8705A"/>
+    <rect x="2" y="16" width="8" height="18" rx="2" fill="#C8705A"/>
+    <rect x="70" y="16" width="8" height="18" rx="2" fill="#C8705A"/>
+    <text x="14" y="36" font-size="17" fill="#1a0808" font-weight="900" font-family="monospace">&#62;</text>
+    <text x="42" y="36" font-size="17" fill="#1a0808" font-weight="900" font-family="monospace">&#60;</text>
+  </svg>
+  <div>
+    <div class="nb-count">×3</div>
+    <div class="nb-label">Agentes IA</div>
+    <div class="nb-desc">Pipeline · Análisis · CRM</div>
+  </div>
+</div>
+
+<div class="node nf" id="vifer-future" style="left:1140px;top:800px;width:190px;">
+  <div class="nf-tag">Próximamente</div>
+  <div class="nf-name">N8N · APOLLO · STRIPE</div>
+  <div class="nf-desc">Workflows · Lead gen<br>Pagos recurrentes</div>
+</div>
+
+<!-- ══════════ ROW 4 — TRADING SUB-NODES ══════════ -->
+<div class="node npart" id="sergi-t" style="left:1330px;top:800px;width:185px;">
+  <div class="npart-init">SA</div>
+  <div class="npart-name">SERGI ALIÓ</div>
+  <div class="npart-role">Co-fundador · Estrategia</div>
+  <div class="npart-pct">50% Trading Lab</div>
+</div>
+
+<div class="node nb" id="trading-bots" style="left:1540px;top:800px;width:210px;">
+  <svg class="bot-svg-el" viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg" style="width:42px;height:38px">
+    <rect x="4" y="2" width="72" height="54" rx="4" fill="white"/>
+    <rect x="14" y="54" width="16" height="17" rx="2" fill="white"/>
+    <rect x="50" y="54" width="16" height="17" rx="2" fill="white"/>
+    <rect x="0" y="14" width="10" height="22" rx="3" fill="white"/>
+    <rect x="70" y="14" width="10" height="22" rx="3" fill="white"/>
+    <rect x="7" y="5" width="66" height="48" rx="3" fill="#C8705A"/>
+    <rect x="16" y="49" width="14" height="15" rx="2" fill="#C8705A"/>
+    <rect x="50" y="49" width="14" height="15" rx="2" fill="#C8705A"/>
+    <rect x="2" y="16" width="8" height="18" rx="2" fill="#C8705A"/>
+    <rect x="70" y="16" width="8" height="18" rx="2" fill="#C8705A"/>
+    <text x="14" y="36" font-size="17" fill="#1a0808" font-weight="900" font-family="monospace">&#62;</text>
+    <text x="42" y="36" font-size="17" fill="#1a0808" font-weight="900" font-family="monospace">&#60;</text>
+  </svg>
+  <div>
+    <div class="nb-count">×1</div>
+    <div class="nb-label">Research Bot</div>
+    <div class="nb-desc">Tesis · On-chain analysis</div>
+  </div>
+</div>
+
+<div class="node nf" id="trading-future" style="left:1770px;top:800px;width:195px;">
+  <div class="nf-tag">Proyectado</div>
+  <div class="nf-name">SIGNALS · ALERTS · AUTO</div>
+  <div class="nf-desc">Señales técnicas<br>On-chain monitoring bot</div>
+</div>
+
+<!-- ══════════ ROW 4 — VENTANA SUB-NODES ══════════ -->
+<div class="node npart" id="sergi-v" style="left:1930px;top:800px;width:185px;">
+  <div class="npart-init">SA</div>
+  <div class="npart-name">SERGI ALIÓ</div>
+  <div class="npart-role">Co-fundador · Contenido</div>
+  <div class="npart-pct">50% Ventana</div>
+</div>
+
+<div class="node nf" id="ventana-bots" style="left:2135px;top:800px;width:200px;">
+  <div class="nf-tag">Próximamente</div>
+  <div class="nf-name">CONTENT BOTS × WEB</div>
+  <div class="nf-desc">Redacción · Publicación<br>Plataforma interactiva</div>
+</div>
+
+<!-- ══════════ ROW 5 — FEEDBACK LOOP ══════════ -->
+<div class="node nloop" id="feedback" style="left:1050px;top:980px;width:500px;">
+  <div class="nloop-label">Retroalimentación del sistema</div>
+  <div style="display:flex;align-items:center;justify-content:center;">
+    <span class="nloop-name">PROYECTOS</span>
+    <span class="nloop-arrow">→</span>
+    <span class="nloop-name">APRENDIZAJE</span>
+    <span class="nloop-arrow">→</span>
+    <span class="nloop-name">MARC / SECOND BRAIN</span>
+  </div>
+</div>
+
+</div><!-- /canvas -->
+</div><!-- /wrapper -->
+
+<script>
+// ── EDGES ──
+const edges = [
+  // Marc → pilares
+  ['marc', 'second-brain', '#00C2D1', 1.5, false],
+  ['marc', 'vav',          '#C8A84B', 2.0, false],
+  // Second Brain → tools
+  ['second-brain', 'notion',       '#00C2D1', 1.0, false],
+  ['second-brain', 'claude-code',  '#00C2D1', 1.5, false],
+  ['second-brain', 'claude-ai',    '#00C2D1', 1.0, false],
+  ['second-brain', 'future-tools', '#00C2D1', 0.8, true],
+  // AI alimenta VAV hijos (transversal)
+  ['claude-code', 'vifer',   '#00C2D1', 0.7, true],
+  ['claude-code', 'trading', '#00C2D1', 0.7, true],
+  ['claude-code', 'ventana', '#00C2D1', 0.6, true],
+  // VAV → hijos
+  ['vav', 'vifer',   '#C8A84B', 1.5, false],
+  ['vav', 'trading', '#5BA87A', 1.5, false],
+  ['vav', 'ventana', '#9B6FD4', 1.5, false],
+  // Vifer → sub-nodes
+  ['vifer', 'joel',         '#C8A84B', 1.0, false],
+  ['vifer', 'vifer-bots',   '#00C2D1', 1.2, false],
+  ['vifer', 'vifer-future', '#C8A84B', 0.7, true],
+  // Trading → sub-nodes
+  ['trading', 'sergi-t',        '#5BA87A', 1.0, false],
+  ['trading', 'trading-bots',   '#00C2D1', 1.2, false],
+  ['trading', 'trading-future', '#5BA87A', 0.7, true],
+  // Ventana → sub-nodes
+  ['ventana', 'sergi-v',      '#9B6FD4', 1.0, false],
+  ['ventana', 'ventana-bots', '#9B6FD4', 0.7, true],
+  // VAV → futuros proyectos
+  ['vav', 'venture-forge', '#C8A84B', 0.9, true],
+  ['vav', 'founder-os',    '#9B6FD4', 0.9, true],
+  ['vav', 'otros',         '#555555', 0.8, true],
+  // Feedback loop
+  ['vifer',   'feedback', '#C8A84B', 0.5, true],
+  ['trading', 'feedback', '#5BA87A', 0.5, true],
+  ['ventana', 'feedback', '#9B6FD4', 0.5, true],
+];
+
+function anchor(el, side) {
+  const cx = el.offsetLeft + el.offsetWidth / 2;
+  return { x: cx, y: side === 'b' ? el.offsetTop + el.offsetHeight : el.offsetTop };
+}
+
+function drawLines() {
+  const svg = document.getElementById('svgl');
+  // remove all path children but keep defs
+  [...svg.querySelectorAll('path,line')].forEach(n => n.remove());
+
+  edges.forEach(([fid, tid, color, w, dashed]) => {
+    const fe = document.getElementById(fid);
+    const te = document.getElementById(tid);
+    if (!fe || !te) return;
+    const a = anchor(fe, 'b');
+    const b = anchor(te, 't');
+    const dy = b.y - a.y;
+    const d = `M${a.x},${a.y} C${a.x},${a.y + dy*0.45} ${b.x},${b.y - dy*0.45} ${b.x},${b.y}`;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', w);
+    p.setAttribute('fill', 'none');
+    p.setAttribute('opacity', dashed ? '0.3' : '0.55');
+    if (dashed) p.setAttribute('stroke-dasharray', '6,5');
+    svg.appendChild(p);
+  });
+}
+
+// ── ZOOM / PAN ──
+let z = 0.7, tx = 0, ty = 40;
+let drag = false, sx, sy, stx, sty;
+
+const wrapper = document.getElementById('wrapper');
+const canvas  = document.getElementById('canvas');
+
+function applyT() {
+  canvas.style.transform = `translate(${tx}px,${ty}px) scale(${z})`;
+  document.getElementById('zlbl').textContent = Math.round(z*100)+'%';
+}
+function setZ(v) { z = Math.max(0.25, Math.min(1.6, v)); applyT(); }
+function fit() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  z = Math.min(vw/3100, vh/1080) * 0.9;
+  tx = (vw - 3100*z) / 2;
+  ty = (vh - 1080*z) / 2;
+  applyT();
+}
+
+wrapper.addEventListener('mousedown', e => {
+  drag=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty;
+  wrapper.classList.add('dragging');
+});
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  tx = stx+(e.clientX-sx); ty = sty+(e.clientY-sy); applyT();
+});
+window.addEventListener('mouseup', () => { drag=false; wrapper.classList.remove('dragging'); });
+wrapper.addEventListener('wheel', e => {
+  e.preventDefault();
+  setZ(z + (e.deltaY > 0 ? -0.07 : 0.07));
+}, { passive:false });
+
+// ── INIT ──
+drawLines();
+fit();
+</script>
+</body>
+</html>
